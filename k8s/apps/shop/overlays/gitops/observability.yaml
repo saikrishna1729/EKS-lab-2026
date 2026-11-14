@@ -1,0 +1,78 @@
+# Prometheus Operator picks these up (kube-prometheus-stack is configured to select all
+# PodMonitors / PrometheusRules in any namespace).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: shop
+  namespace: shop
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: shop
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+    - port: metrics
+      path: /metrics
+      interval: 15s
+---
+# SLO: 99.5% of shop-api requests succeed over 30 days  => error budget 0.5%.
+# Multi-window, multi-burn-rate alerts (Google SRE workbook, ch. 5):
+#   page   when burning 14.4x budget over 1h  (and still burning over 5m)
+#   ticket when burning 6x budget over 6h     (and still burning over 30m)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shop-slo
+  namespace: shop
+spec:
+  groups:
+    - name: shop-api-slo.rules
+      rules:
+        - record: shop:api_error_ratio:rate5m
+          expr: |
+            sum(rate(http_requests_total{service="shop-api",status=~"5.."}[5m]))
+            / sum(rate(http_requests_total{service="shop-api"}[5m]))
+        - record: shop:api_error_ratio:rate30m
+          expr: |
+            sum(rate(http_requests_total{service="shop-api",status=~"5.."}[30m]))
+            / sum(rate(http_requests_total{service="shop-api"}[30m]))
+        - record: shop:api_error_ratio:rate1h
+          expr: |
+            sum(rate(http_requests_total{service="shop-api",status=~"5.."}[1h]))
+            / sum(rate(http_requests_total{service="shop-api"}[1h]))
+        - record: shop:api_error_ratio:rate6h
+          expr: |
+            sum(rate(http_requests_total{service="shop-api",status=~"5.."}[6h]))
+            / sum(rate(http_requests_total{service="shop-api"}[6h]))
+        - record: shop:api_latency_p99:5m
+          expr: |
+            histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{service="shop-api"}[5m])))
+    - name: shop-api-slo.alerts
+      rules:
+        - alert: ShopApiErrorBudgetFastBurn
+          expr: shop:api_error_ratio:rate1h > (14.4 * 0.005) and shop:api_error_ratio:rate5m > (14.4 * 0.005)
+          for: 2m
+          labels: { severity: critical, team: shop }
+          annotations:
+            summary: "shop-api is burning its error budget 14x too fast"
+            description: "1h error ratio {{ $value | humanizePercentage }}. At this rate the 30-day budget is gone in ~2 days."
+        - alert: ShopApiErrorBudgetSlowBurn
+          expr: shop:api_error_ratio:rate6h > (6 * 0.005) and shop:api_error_ratio:rate30m > (6 * 0.005)
+          for: 15m
+          labels: { severity: warning, team: shop }
+          annotations:
+            summary: "shop-api error budget slow burn"
+        - alert: ShopApiHighLatency
+          expr: shop:api_latency_p99:5m > 0.5
+          for: 5m
+          labels: { severity: warning, team: shop }
+          annotations:
+            summary: "shop-api p99 latency above 500ms"
+        - alert: ShopOrdersBacklog
+          expr: sum(rate(orders_processed_total{result="ok"}[5m])) == 0 and on() sum(kube_deployment_status_replicas_available{deployment="shop-worker"}) == 0
+          for: 10m
+          labels: { severity: warning, team: shop }
+          annotations:
+            summary: "No orders processed and no worker available"

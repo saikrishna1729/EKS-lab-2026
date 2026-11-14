@@ -1,0 +1,54 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: shop-critical
+value: 100000
+globalDefault: false
+description: "User-facing shop pods: scheduled before batch work, evicted last."
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: shop-web
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shop-web
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: shop-api
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shop-api
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: shop
+  namespace: shop
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 8Gi
+    limits.memory: 16Gi
+    pods: "60"
+    services.loadbalancers: "0" # force exposure through the shared ALB Ingress
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: shop-defaults
+  namespace: shop
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 50m, memory: 64Mi }
+      default: { memory: 256Mi }
+      max: { memory: 1Gi }

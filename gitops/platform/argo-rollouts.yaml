@@ -1,0 +1,43 @@
+# Installs argo-rollouts 2.43.12 on every cluster whose Argo CD cluster secret has enable_argo_rollouts=true.
+# Per-cluster values come from the secret's annotations (written by scripts/addons.sh from Terraform).
+# Ordering between add-ons is handled by retries (e.g. Karpenter CRs wait for the Karpenter CRDs).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: argo-rollouts
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_argo_rollouts: "true"
+  template:
+    metadata:
+      name: 'argo-rollouts-{{ .name }}'
+    spec:
+      project: default
+      sources:
+        - repoURL: https://argoproj.github.io/argo-helm
+          chart: argo-rollouts
+          targetRevision: 2.43.12
+          helm:
+            releaseName: argo-rollouts
+            valueFiles:
+              - $values/k8s/platform/values/argo-rollouts.yaml
+        - repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+          targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+          ref: values
+      destination:
+        server: '{{ .server }}'
+        namespace: argo-rollouts
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

@@ -1,0 +1,21 @@
+# In-cluster load generator (L300 autoscaling labs). Edit args, then:
+#   kubectl apply -f k8s/tools/load-test.yaml ; kubectl -n shop logs -f job/load
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load
+  namespace: shop
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: hey
+          image: public.ecr.aws/docker/library/golang:1.25-alpine
+          command: ["sh", "-c"]
+          args:
+            - go run github.com/rakyll/hey@latest -z 5m -c 50 "http://shop-api.shop:8080/api/burn?seconds=0.2"
+          resources:
+            requests: { cpu: 500m, memory: 256Mi }
+            limits: { memory: 512Mi }

@@ -1,0 +1,14 @@
+# The "viewer" persona's access entry maps it to the Kubernetes group "lab-viewers"
+# (terraform/envs/lab/security.tf). Here we decide what that group may do — plain RBAC.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: lab-viewers-view
+subjects:
+  - kind: Group
+    name: lab-viewers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: view          # built-in: read most objects, but NOT Secrets
+  apiGroup: rbac.authorization.k8s.io

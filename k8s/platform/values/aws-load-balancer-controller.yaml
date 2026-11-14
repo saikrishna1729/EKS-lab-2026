@@ -1,0 +1,18 @@
+# AWS Load Balancer Controller. clusterName / region / vpcId are injected per cluster
+# (IMDS is blocked for pods by hop-limit 1, so the controller can't discover them itself).
+replicaCount: 2
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller   # matches the Pod Identity association (Terraform)
+# Avoid the classic chicken-and-egg: with this webhook on, every Service create fails
+# while the controller is down. We set loadBalancerClass explicitly instead.
+enableServiceMutatorWebhook: false
+controllerConfig:
+  featureGates:
+    ALBGatewayAPI: true
+    NLBGatewayAPI: true
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { memory: 256Mi }
+nodeSelector:
+  node-role: core

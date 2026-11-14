@@ -1,0 +1,16 @@
+# Bucket + region are injected per cluster. Credentials come from Pod Identity.
+serviceAccount:
+  server:
+    name: velero-server
+credentials:
+  useSecret: false
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.14.4
+    volumeMounts:
+      - { mountPath: /target, name: plugins }
+configuration:
+  features: EnableCSI
+  defaultSnapshotMoveData: true   # copy CSI snapshot data to S3 => restorable in another region
+deployNodeAgent: true             # data mover for snapshotMoveData
+snapshotsEnabled: false           # we use CSI snapshots (EBS CSI), not the legacy AWS plugin path

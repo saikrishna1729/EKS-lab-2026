@@ -1,0 +1,42 @@
+# The shop application (k8s/apps/shop/overlays/gitops). CI changes the image tag in Git;
+# Argo CD syncs it; Argo Rollouts runs the canary.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: shop
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_shop: "true"
+  template:
+    metadata:
+      name: 'shop-{{ .name }}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+        targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+        path: k8s/apps/shop/overlays/gitops
+      destination:
+        server: '{{ .server }}'
+        namespace: shop
+      # Rollouts owns these at runtime
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          name: shop-api
+          jsonPointers: [/spec/replicas]
+        - group: ""
+          kind: Service
+          jqPathExpressions: ['.spec.selector."rollouts-pod-template-hash"']
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [ServerSideApply=true, RespectIgnoreDifferences=true]
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

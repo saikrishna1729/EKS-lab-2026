@@ -1,0 +1,47 @@
+# Installs karpenter 1.15.2 on every cluster whose Argo CD cluster secret has enable_karpenter=true.
+# Per-cluster values come from the secret's annotations (written by scripts/addons.sh from Terraform).
+# Ordering between add-ons is handled by retries (e.g. Karpenter CRs wait for the Karpenter CRDs).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: karpenter
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_karpenter: "true"
+  template:
+    metadata:
+      name: 'karpenter-{{ .name }}'
+    spec:
+      project: default
+      sources:
+        - repoURL: public.ecr.aws/karpenter
+          chart: karpenter
+          targetRevision: 1.15.2
+          helm:
+            releaseName: karpenter
+            valueFiles:
+              - $values/k8s/platform/values/karpenter.yaml
+            valuesObject:
+              settings:
+                clusterName: '{{ index .metadata.annotations "cluster_name" }}'
+                interruptionQueue: '{{ index .metadata.annotations "karpenter_queue" }}'
+        - repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+          targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+          ref: values
+      destination:
+        server: '{{ .server }}'
+        namespace: kube-system
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

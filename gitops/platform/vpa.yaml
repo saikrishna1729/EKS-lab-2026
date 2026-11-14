@@ -1,0 +1,42 @@
+# Installs vpa 5.2.0 on every cluster whose Argo CD cluster secret has enable_vpa=true.
+# Per-cluster values come from the secret's annotations (written by scripts/addons.sh from Terraform).
+# Ordering between add-ons is handled by retries (e.g. Karpenter CRs wait for the Karpenter CRDs).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: vpa
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_vpa: "true"
+  template:
+    metadata:
+      name: 'vpa-{{ .name }}'
+    spec:
+      project: default
+      sources:
+        - repoURL: https://charts.fairwinds.com/stable
+          chart: vpa
+          targetRevision: 5.2.0
+          helm:
+            releaseName: vpa
+            valueFiles:
+              - $values/k8s/platform/values/vpa.yaml
+        - repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+          targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+          ref: values
+      destination:
+        server: '{{ .server }}'
+        namespace: vpa
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

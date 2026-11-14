@@ -1,0 +1,11 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+httpx==0.28.1
+python-multipart==0.0.20
+boto3==1.38.13
+prometheus-client==0.21.1
+opentelemetry-distro==0.54b1
+opentelemetry-exporter-otlp==1.33.1
+opentelemetry-instrumentation-fastapi==0.54b1
+opentelemetry-instrumentation-httpx==0.54b1
+opentelemetry-instrumentation-botocore==0.54b1

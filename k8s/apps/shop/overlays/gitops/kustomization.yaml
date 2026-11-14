@@ -1,0 +1,31 @@
+# L300+: the overlay Argo CD deploys. Adds the production features:
+#   Argo Rollouts canary (ALB traffic split + Prometheus analysis) for shop-api
+#   HPA (web), KEDA SQS scaling (worker), PDBs, zone spread, priority, quotas
+#   PodMonitor + SLO burn-rate alerts, OpenTelemetry tracing, External Secrets
+#
+# `scripts/gitops-init.sh` fills in cluster-values.yaml and the image names once;
+# CI (.github/workflows/shop.yaml) bumps newTag on every build.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - rollout.yaml
+  - scaling.yaml
+  - resilience.yaml
+  - observability.yaml
+  - secrets.yaml
+components:
+  - ../../components/alb-ingress
+patches:
+  - path: cluster-values.yaml
+  - path: deployment-patches.yaml
+images:
+  - name: shop-api
+    newName: ECR_REGISTRY/eks-lab/shop-api
+    newTag: IMAGE_TAG
+  - name: shop-web
+    newName: ECR_REGISTRY/eks-lab/shop-web
+    newTag: IMAGE_TAG
+  - name: shop-worker
+    newName: ECR_REGISTRY/eks-lab/shop-worker
+    newTag: IMAGE_TAG

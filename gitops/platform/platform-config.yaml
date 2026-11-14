@@ -1,0 +1,47 @@
+# Cluster-scoped config from the local chart k8s/platform/charts/platform-config:
+# gp3 default StorageClass, snapshot class, GatewayClasses, Karpenter NodePool/EC2NodeClass,
+# the External Secrets ClusterSecretStore and Let's Encrypt ClusterIssuers.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-config
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_platform_config: "true"
+  template:
+    metadata:
+      name: 'platform-config-{{ .name }}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+        targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+        path: k8s/platform/charts/platform-config
+        helm:
+          releaseName: platform-config
+          # parameters (not valuesObject) so "true"/"false" become real booleans
+          parameters:
+            - { name: clusterName, value: '{{ index .metadata.annotations "cluster_name" }}' }
+            - { name: region, value: '{{ index .metadata.annotations "aws_region" }}' }
+            - { name: storage.efsId, value: '{{ index .metadata.annotations "efs_id" }}' }
+            - { name: karpenter.enabled, value: '{{ index .metadata.labels "enable_karpenter" }}' }
+            - { name: externalSecrets.enabled, value: '{{ index .metadata.labels "enable_external_secrets" }}' }
+            - { name: certManager.enabled, value: '{{ index .metadata.labels "enable_cert_manager" }}' }
+            - { name: certManager.domain, value: '{{ index .metadata.annotations "domain" }}' }
+            - { name: certManager.hostedZoneId, value: '{{ index .metadata.annotations "route53_zone_id" }}' }
+            - { name: certManager.email, value: '{{ index .metadata.annotations "alert_email" }}' }
+      destination:
+        server: '{{ .server }}'
+        namespace: kube-system
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [ServerSideApply=true]
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

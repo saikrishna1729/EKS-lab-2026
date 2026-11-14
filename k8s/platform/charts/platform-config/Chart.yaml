@@ -1,0 +1,5 @@
+apiVersion: v2
+name: platform-config
+description: Cluster-scoped config for the EKS lab (storage, Karpenter pools, gateway classes, secret store, issuers)
+type: application
+version: 0.1.0

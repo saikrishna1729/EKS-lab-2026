@@ -1,0 +1,119 @@
+# Zero-trust networking for "shop" (enforced by the VPC CNI network policy agent, L400 tfvars).
+# Start from default-deny, then allow only the flows the app needs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: shop
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: shop
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# ALB (IP targets) -> web and api. ALB ENIs live in the public subnets of the VPC.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alb-ingress
+  namespace: shop
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [shop-web, shop-api] }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock: { cidr: 10.0.0.0/16 }   # VPC CIDR (terraform var vpc_cidr)
+      ports:
+        - { protocol: TCP, port: 8080 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-to-api
+  namespace: shop
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: shop-api }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: shop-web }
+      ports:
+        - { protocol: TCP, port: 8080 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-egress-to-api
+  namespace: shop
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: shop-web }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: shop-api }
+      ports:
+        - { protocol: TCP, port: 8080 }
+---
+# api + worker call AWS APIs (S3, SQS, STS) over HTTPS — via NAT or VPC endpoints
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: aws-api-egress
+  namespace: shop
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [shop-api, shop-worker] }
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - { protocol: TCP, port: 443 }
+    # EKS Pod Identity agent runs on each node at this link-local address
+    - to:
+        - ipBlock: { cidr: 169.254.170.23/32 }
+      ports:
+        - { protocol: TCP, port: 80 }
+---
+# Observability: Prometheus scrapes :8080, apps export traces to the OTel collector
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring
+  namespace: shop
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+      ports:
+        - { protocol: TCP, port: 8080 }
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+      ports:
+        - { protocol: TCP, port: 4317 }

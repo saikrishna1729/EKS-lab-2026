@@ -1,0 +1,25 @@
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: ebs-writer-0-snap
+  namespace: storage-lab
+spec:
+  volumeSnapshotClassName: ebs-csi
+  source:
+    persistentVolumeClaimName: data-ebs-writer-0
+---
+# Restore: a new PVC from the snapshot (same AZ rules apply when a pod uses it)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: restored
+  namespace: storage-lab
+spec:
+  storageClassName: gp3
+  dataSource:
+    name: ebs-writer-0-snap
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: 2Gi }

@@ -1,0 +1,26 @@
+# L100: expose shop-web with a plain `type: LoadBalancer` Service.
+# With no AWS Load Balancer Controller installed, EKS's built-in cloud provider creates a
+# Classic Load Balancer. In L200 you replace this with an ALB Ingress.
+# ${ECR_REGISTRY} and ${IMAGE_TAG} are filled in by scripts/deploy-shop.sh (envsubst).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: shop-api
+    newName: ${ECR_REGISTRY}/eks-lab/shop-api
+    newTag: ${IMAGE_TAG}
+  - name: shop-web
+    newName: ${ECR_REGISTRY}/eks-lab/shop-web
+    newTag: ${IMAGE_TAG}
+  - name: shop-worker
+    newName: ${ECR_REGISTRY}/eks-lab/shop-worker
+    newTag: ${IMAGE_TAG}
+patches:
+  - target:
+      kind: Service
+      name: shop-web
+    patch: |
+      - op: add
+        path: /spec/type
+        value: LoadBalancer

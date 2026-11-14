@@ -1,0 +1,42 @@
+# Installs opentelemetry-collector 0.178.3 on every cluster whose Argo CD cluster secret has enable_otel_collector=true.
+# Per-cluster values come from the secret's annotations (written by scripts/addons.sh from Terraform).
+# Ordering between add-ons is handled by retries (e.g. Karpenter CRs wait for the Karpenter CRDs).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: otel-collector
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_otel_collector: "true"
+  template:
+    metadata:
+      name: 'otel-collector-{{ .name }}'
+    spec:
+      project: default
+      sources:
+        - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+          chart: opentelemetry-collector
+          targetRevision: 0.178.3
+          helm:
+            releaseName: otel
+            valueFiles:
+              - $values/k8s/platform/values/opentelemetry-collector.yaml
+        - repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+          targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+          ref: values
+      destination:
+        server: '{{ .server }}'
+        namespace: monitoring
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

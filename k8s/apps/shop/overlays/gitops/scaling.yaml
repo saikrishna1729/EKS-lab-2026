@@ -1,0 +1,70 @@
+# HPA on CPU for the web tier, HPA on the Rollout for the api, KEDA on SQS depth for the worker.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: shop-web
+  namespace: shop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: shop-web
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 60 }
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 120
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: shop-api
+  namespace: shop
+spec:
+  scaleTargetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: shop-api
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 60 }
+---
+# KEDA authenticates to SQS with the KEDA operator's own Pod Identity role (identityOwner: keda)
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: aws-keda-identity
+  namespace: shop
+spec:
+  podIdentity:
+    provider: aws
+    identityOwner: keda
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: shop-worker
+  namespace: shop
+spec:
+  scaleTargetRef:
+    name: shop-worker
+  minReplicaCount: 1
+  maxReplicaCount: 15
+  cooldownPeriod: 60
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: aws-keda-identity
+      metadata:
+        queueURLFromEnv: QUEUE_URL
+        queueLength: "5" # target messages per replica
+        awsRegion: AWS_REGION

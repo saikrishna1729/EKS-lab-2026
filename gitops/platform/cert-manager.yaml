@@ -1,0 +1,43 @@
+# Installs cert-manager v1.21.3 on every cluster whose Argo CD cluster secret has enable_cert_manager=true.
+# Per-cluster values come from the secret's annotations (written by scripts/addons.sh from Terraform).
+# Ordering between add-ons is handled by retries (e.g. Karpenter CRs wait for the Karpenter CRDs).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cert-manager
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_cert_manager: "true"
+  template:
+    metadata:
+      name: 'cert-manager-{{ .name }}'
+    spec:
+      project: default
+      sources:
+        - repoURL: https://charts.jetstack.io
+          chart: cert-manager
+          targetRevision: v1.21.3
+          helm:
+            releaseName: cert-manager
+            valueFiles:
+              - $values/k8s/platform/values/cert-manager.yaml
+        - repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+          targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+          ref: values
+      destination:
+        server: '{{ .server }}'
+        namespace: cert-manager
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

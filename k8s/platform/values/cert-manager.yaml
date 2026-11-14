@@ -1,0 +1,7 @@
+crds:
+  enabled: true
+serviceAccount:
+  name: cert-manager   # matches the Pod Identity association
+# Route 53 DNS-01 needs to resolve against public DNS, not the VPC resolver's split view
+dns01RecursiveNameservers: "8.8.8.8:53,1.1.1.1:53"
+dns01RecursiveNameserversOnly: true

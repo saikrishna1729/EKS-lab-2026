@@ -1,0 +1,14 @@
+# Karpenter controller runs on the core managed node group, never on nodes it manages.
+replicas: 1            # 2 in production (leader election)
+serviceAccount:
+  name: karpenter      # matches the Pod Identity association from the karpenter module
+nodeSelector:
+  node-role: core
+controller:
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits: { memory: 512Mi }
+settings:
+  # clusterName + interruptionQueue are injected per cluster
+  featureGates:
+    spotToSpotConsolidation: true

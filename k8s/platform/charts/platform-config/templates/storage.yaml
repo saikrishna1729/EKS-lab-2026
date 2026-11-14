@@ -1,0 +1,42 @@
+{{- if .Values.storage.enabled }}
+# gp3 is cheaper and faster than the legacy gp2 default; make it THE default class.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+# Create the volume only once the pod is scheduled => volume lands in the pod's AZ
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+parameters:
+  type: gp3
+  encrypted: "true"
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: ebs-csi
+  labels:
+    velero.io/csi-volumesnapshot-class: "true"
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+driver: ebs.csi.aws.com
+deletionPolicy: Delete
+{{- if .Values.storage.efsId }}
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap          # one EFS access point per PVC
+  fileSystemId: {{ .Values.storage.efsId }}
+  directoryPerms: "700"
+  uid: "10001"
+  gid: "10001"
+{{- end }}
+{{- end }}

@@ -1,0 +1,22 @@
+# L400 runtime-detection drill. Creates a pod you then "attack" by hand:
+#   kubectl apply -f k8s/tools/attack-sim.yaml
+#   kubectl -n attack-sim exec -it suspicious -- sh -c 'apk add curl; curl -s http://169.254.169.254/latest/meta-data/ ; cat /etc/shadow; nc -lk -p 4444 &'
+# Then look for GuardDuty findings (Runtime Monitoring) a few minutes later.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: attack-sim
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: suspicious
+  namespace: attack-sim
+spec:
+  containers:
+    - name: shell
+      image: public.ecr.aws/docker/library/alpine:3.22
+      command: ["sleep", "infinity"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { memory: 64Mi }

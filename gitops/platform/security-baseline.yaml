@@ -1,0 +1,34 @@
+# L400: Kyverno policies, default-deny NetworkPolicies, RBAC for the viewer persona,
+# Pod Security "restricted" for the shop namespace. Source: k8s/L400/
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: security-baseline
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_security_baseline: "true"
+  template:
+    metadata:
+      name: 'security-baseline-{{ .name }}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+        targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+        path: k8s/L400
+        directory:
+          recurse: true
+      destination:
+        server: '{{ .server }}'
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [ServerSideApply=true, SkipDryRunOnMissingResource=true]
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

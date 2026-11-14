@@ -1,0 +1,45 @@
+# Installs external-dns 1.23.0 on every cluster whose Argo CD cluster secret has enable_external_dns=true.
+# Per-cluster values come from the secret's annotations (written by scripts/addons.sh from Terraform).
+# Ordering between add-ons is handled by retries (e.g. Karpenter CRs wait for the Karpenter CRDs).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: external-dns
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_external_dns: "true"
+  template:
+    metadata:
+      name: 'external-dns-{{ .name }}'
+    spec:
+      project: default
+      sources:
+        - repoURL: https://kubernetes-sigs.github.io/external-dns/
+          chart: external-dns
+          targetRevision: 1.23.0
+          helm:
+            releaseName: external-dns
+            valueFiles:
+              - $values/k8s/platform/values/external-dns.yaml
+            valuesObject:
+              txtOwnerId: '{{ index .metadata.annotations "cluster_name" }}'
+              domainFilters: ['{{ index .metadata.annotations "domain" }}']
+        - repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+          targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+          ref: values
+      destination:
+        server: '{{ .server }}'
+        namespace: external-dns
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

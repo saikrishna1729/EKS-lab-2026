@@ -1,0 +1,20 @@
+{{- if .Values.gatewayClasses.enabled }}
+# Gateway API classes served by the AWS Load Balancer Controller
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: aws-alb
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  controllerName: gateway.k8s.aws/alb
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: aws-nlb
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  controllerName: gateway.k8s.aws/nlb
+{{- end }}

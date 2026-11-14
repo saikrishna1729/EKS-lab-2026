@@ -1,0 +1,70 @@
+# L300 CI: build → scan → push to ECR (keyless via OIDC) → bump the GitOps image tag.
+# Argo CD sees the commit and Argo Rollouts runs the canary.
+# Repo settings → Variables: AWS_REGION, AWS_ACCOUNT_ID   (role comes from bootstrap: eks-lab-github-ci)
+name: shop
+on:
+  push:
+    branches: [main]
+    paths: ["apps/shop/**"]
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write   # OIDC token for AWS
+  contents: write   # push the tag bump
+
+concurrency: shop-release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
+    steps:
+      - uses: actions/checkout@v7
+      - run: echo "TAG=${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/eks-lab-github-ci
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build & push (multi-arch)
+        run: |
+          for svc in web api worker; do
+            docker buildx build --platform linux/arm64,linux/amd64 --provenance=false \
+              --build-arg SERVICE=$svc -t $REGISTRY/eks-lab/shop-$svc:$TAG --push apps/shop
+          done
+
+      - name: Scan (fail on CRITICAL)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/eks-lab/shop-api:${{ env.TAG }}
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+      # L400: sign with cosign (add COSIGN_PRIVATE_KEY + COSIGN_PASSWORD secrets, then uncomment)
+      # - uses: sigstore/cosign-installer@v4
+      # - run: |
+      #     for svc in web api worker; do
+      #       digest=$(aws ecr describe-images --repository-name eks-lab/shop-$svc --image-ids imageTag=$TAG --query 'imageDetails[0].imageDigest' --output text)
+      #       cosign sign --yes --key env://COSIGN_PRIVATE_KEY $REGISTRY/eks-lab/shop-$svc@$digest
+      #     done
+      #   env:
+      #     COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+      #     COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+
+      - name: Bump GitOps image tag
+        run: |
+          cd k8s/apps/shop/overlays/gitops
+          for svc in web api worker; do
+            yq -i "(.images[] | select(.name == \"shop-$svc\") | .newTag) = \"$TAG\"" kustomization.yaml
+          done
+          git config user.name "eks-lab-ci"
+          git config user.email "eks-lab-ci@users.noreply.github.com"
+          git commit -am "shop: deploy $TAG" && git push

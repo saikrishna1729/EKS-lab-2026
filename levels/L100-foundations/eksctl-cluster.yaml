@@ -1,0 +1,38 @@
+# L100 session 1: your first, throwaway cluster — the "click-ops in YAML" way.
+#   eksctl create cluster -f levels/L100-foundations/eksctl-cluster.yaml   (~15 min)
+#   eksctl delete cluster -f levels/L100-foundations/eksctl-cluster.yaml --disable-nodegroup-eviction
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: eks-lab-first
+  region: ap-southeast-1     # change to your AWS_REGION
+  version: "1.35"
+  tags:
+    Project: eks-lab
+    Level: L100
+
+accessConfig:
+  authenticationMode: API     # access entries, no aws-auth ConfigMap
+
+vpc:
+  nat:
+    gateway: Single           # one NAT gateway (lab); HighlyAvailable = one per AZ
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: eks-pod-identity-agent
+
+managedNodeGroups:
+  - name: spot-arm
+    instanceTypes: ["t4g.large", "m7g.large", "m6g.large"]
+    spot: true
+    minSize: 1
+    maxSize: 3
+    desiredCapacity: 2
+    privateNetworking: true
+    labels: { node-role: core }
+    volumeSize: 30
+    volumeType: gp3

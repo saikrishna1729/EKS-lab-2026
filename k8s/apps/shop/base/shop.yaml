@@ -1,0 +1,268 @@
+# Base manifests for the shop app. Overlays add exposure (L100 LB Service, L200 Ingress)
+# and production features (L300+: HPA, PDB, KEDA, Rollout, ServiceMonitor, tracing).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+  labels:
+    # L400 raises enforce to "restricted"
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shop-api
+  namespace: shop
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shop-worker
+  namespace: shop
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shop-web
+  namespace: shop
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shop-config
+  namespace: shop
+data:
+  APP_VERSION: v1
+  API_URL: http://shop-api:8080
+  PROCESS_MS: "200"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-api
+  namespace: shop
+  labels: &labels
+    app.kubernetes.io/name: shop-api
+    app.kubernetes.io/part-of: shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shop-api
+  template:
+    metadata:
+      labels: *labels
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: shop-api
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: shop-api
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: shop-config
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 256Mi }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          lifecycle:
+            # Give the load balancer time to deregister the pod before it stops accepting traffic
+            preStop:
+              sleep: { seconds: 10 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop-api
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: shop-api
+spec:
+  selector:
+    app.kubernetes.io/name: shop-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-web
+  namespace: shop
+  labels: &weblabels
+    app.kubernetes.io/name: shop-web
+    app.kubernetes.io/part-of: shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shop-web
+  template:
+    metadata:
+      labels: *weblabels
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: shop-web
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: shop-web
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: shop-config
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { memory: 192Mi }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+          lifecycle:
+            preStop:
+              sleep: { seconds: 10 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop-web
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: shop-web
+spec:
+  selector:
+    app.kubernetes.io/name: shop-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-worker
+  namespace: shop
+  labels: &workerlabels
+    app.kubernetes.io/name: shop-worker
+    app.kubernetes.io/part-of: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shop-worker
+  template:
+    metadata:
+      labels: *workerlabels
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: shop-worker
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: shop-worker
+          ports:
+            - name: metrics
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: shop-config
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { memory: 192Mi }
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            initialDelaySeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}

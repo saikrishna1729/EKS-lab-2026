@@ -1,0 +1,72 @@
+# Strategic-merge patches: tracing env, zone spreading, priority, secrets, and
+# letting the autoscalers own replica counts.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-api
+  namespace: shop
+spec:
+  # Argo Rollouts takes over these pods (workloadRef) and scales this Deployment to 0.
+  replicas: 0
+  template:
+    spec:
+      priorityClassName: shop-critical
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: shop-api
+      containers:
+        - name: api
+          envFrom: # envFrom has no merge key, so list both sources
+            - configMapRef:
+                name: shop-config
+            - secretRef:
+                name: shop-secrets
+                optional: true
+          env:
+            - { name: OTEL_TRACES_EXPORTER, value: otlp }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://otel-collector.monitoring:4317" }
+            - { name: OTEL_EXPORTER_OTLP_PROTOCOL, value: grpc }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-web
+  namespace: shop
+spec:
+  replicas: null # HPA owns it
+  template:
+    spec:
+      priorityClassName: shop-critical
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: shop-web
+      containers:
+        - name: web
+          env:
+            - { name: OTEL_TRACES_EXPORTER, value: otlp }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://otel-collector.monitoring:4317" }
+            - { name: OTEL_EXPORTER_OTLP_PROTOCOL, value: grpc }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-worker
+  namespace: shop
+spec:
+  replicas: null # KEDA owns it
+  template:
+    spec:
+      containers:
+        - name: worker
+          env:
+            - { name: OTEL_TRACES_EXPORTER, value: otlp }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://otel-collector.monitoring:4317" }
+            - { name: OTEL_EXPORTER_OTLP_PROTOCOL, value: grpc }

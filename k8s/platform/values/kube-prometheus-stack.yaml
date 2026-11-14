@@ -1,0 +1,78 @@
+# Short, predictable names: kps-prometheus, kps-alertmanager, kps-grafana, ...
+fullnameOverride: kps
+kube-state-metrics:
+  fullnameOverride: kps-kube-state-metrics
+prometheus-node-exporter:
+  fullnameOverride: kps-prometheus-node-exporter
+
+# The EKS control plane is managed by AWS: these components can't be scraped from inside.
+kubeControllerManager: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeEtcd: { enabled: false }
+kubeProxy: { enabled: false }
+
+prometheus:
+  prometheusSpec:
+    retention: 2d
+    # Pick up PodMonitors / ServiceMonitors / rules from every namespace, not only this release
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    enableRemoteWriteReceiver: true   # Tempo's metrics-generator writes span metrics here
+    resources:
+      requests: { cpu: 200m, memory: 1Gi }
+      limits: { memory: 2Gi }
+    # Lab: emptyDir (data lost with the pod). Production: a gp3 PVC or remote-write to AMP.
+    # storageSpec:
+    #   volumeClaimTemplate:
+    #     spec: { storageClassName: gp3, resources: { requests: { storage: 50Gi } } }
+
+alertmanager:
+  config:
+    route:
+      receiver: "null"
+      group_by: [alertname, namespace]
+      routes:
+        - receiver: "null"
+          matchers: [alertname = "Watchdog"]
+        - receiver: shop-team
+          matchers: [team = "shop"]
+    receivers:
+      - name: "null"
+      - name: shop-team
+        # Add a real receiver in L300 (Slack incoming webhook or SNS/email):
+        # slack_configs:
+        #   - api_url_file: /etc/alertmanager/secrets/slack/url
+        #     channel: "#eks-lab-alerts"
+        #     send_resolved: true
+  alertmanagerSpec:
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+
+grafana:
+  fullnameOverride: kps-grafana
+  # Lab only: reachable via port-forward. Move to an ExternalSecret in L400.
+  adminPassword: eks-lab-admin
+  # SigV4 lets Grafana query Amazon Managed Prometheus with its Pod Identity role (L300 part B)
+  grafana.ini:
+    auth:
+      sigv4_auth_enabled: true
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+  additionalDataSources:
+    - name: Tempo
+      uid: tempo
+      type: tempo
+      url: http://tempo.monitoring:3200
+      jsonData:
+        tracesToMetrics: { datasourceUid: prometheus }
+        serviceMap: { datasourceUid: prometheus }
+        nodeGraph: { enabled: true }
+    - name: CloudWatch
+      type: cloudwatch
+      jsonData:
+        authType: default
+        defaultRegion: ap-southeast-1

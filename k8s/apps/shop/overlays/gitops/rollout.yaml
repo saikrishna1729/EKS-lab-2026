@@ -1,0 +1,89 @@
+# Progressive delivery for shop-api with Argo Rollouts.
+# - workloadRef reuses the Deployment's pod template (the Deployment is scaled to 0)
+# - ALB weighted target groups shift real traffic: 10% → 30% → 60% → 100%
+# - each step is gated by a Prometheus success-rate analysis; failure = automatic rollback
+# Try it: set ERROR_RATE=0.3 in the Rollout env (or APP_VERSION) and push → watch it abort.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: shop-api
+  namespace: shop
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shop-api
+  workloadRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: shop-api
+    scaleDown: progressively
+  strategy:
+    canary:
+      stableService: shop-api-stable
+      canaryService: shop-api-canary
+      trafficRouting:
+        alb:
+          ingress: shop
+          rootService: shop-api
+          servicePort: 8080
+      analysis:
+        templates:
+          - templateName: success-rate
+        startingStep: 1
+        args:
+          - name: service
+            value: shop-api
+      steps:
+        - setWeight: 10
+        - pause: { duration: 60s }
+        - setWeight: 30
+        - pause: { duration: 60s }
+        - setWeight: 60
+        - pause: { duration: 60s }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop-api-stable
+  namespace: shop
+spec:
+  selector:
+    app.kubernetes.io/name: shop-api
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop-api-canary
+  namespace: shop
+spec:
+  selector:
+    app.kubernetes.io/name: shop-api
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: success-rate
+  namespace: shop
+spec:
+  args:
+    - name: service
+  metrics:
+    - name: success-rate
+      interval: 30s
+      count: 4
+      failureLimit: 1
+      # No traffic yet => NaN; treat as success so a quiet lab doesn't block rollouts
+      successCondition: len(result) == 0 || isNaN(result[0]) || result[0] >= 0.95
+      provider:
+        prometheus:
+          address: http://kps-prometheus.monitoring:9090
+          query: |
+            sum(rate(http_requests_total{service="{{args.service}}",status!~"5.."}[1m]))
+            /
+            sum(rate(http_requests_total{service="{{args.service}}"}[1m]))

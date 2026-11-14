@@ -1,0 +1,32 @@
+# Supply chain: only cosign-signed images may run in "shop".
+# 1. cosign generate-key-pair   (keep cosign.key secret; it's gitignored)
+# 2. paste cosign.pub below and switch validationFailureAction to Enforce
+# 3. sign in CI:  cosign sign --key env://COSIGN_KEY <image>@<digest>
+# Kyverno pulls signatures from ECR using its own Pod Identity role (ECR read-only).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-shop-image-signatures
+spec:
+  validationFailureAction: Audit
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: cosign-signed
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [shop]
+      verifyImages:
+        - imageReferences:
+            - "*.dkr.ecr.*.amazonaws.com/eks-lab/*"
+          mutateDigest: true      # rewrite tag -> digest so what runs is what was verified
+          verifyDigest: true
+          required: true
+          attestors:
+            - entries:
+                - keys:
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      REPLACE_WITH_YOUR_COSIGN_PUBLIC_KEY
+                      -----END PUBLIC KEY-----

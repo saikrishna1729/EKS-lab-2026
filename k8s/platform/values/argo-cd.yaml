@@ -1,0 +1,28 @@
+global:
+  domain: argocd.local
+configs:
+  params:
+    server.insecure: true         # TLS terminates at port-forward / ALB in this lab
+  cm:
+    # Argo Rollouts rewrites the shop Ingress annotations during a canary — don't fight it
+    resource.customizations.ignoreDifferences.networking.k8s.io_Ingress: |
+      jqPathExpressions:
+        - .metadata.annotations
+    resource.exclusions: |
+      - apiGroups: ["karpenter.sh"]
+        kinds: ["NodeClaim"]
+        clusters: ["*"]
+controller:
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+server:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+repoServer:
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+redis:
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+dex:
+  enabled: false

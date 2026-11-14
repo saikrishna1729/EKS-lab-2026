@@ -1,0 +1,56 @@
+# Gateway API on AWS: GatewayClass "aws-alb" (platform-config) -> an internet-facing ALB.
+# Roles: platform team owns the GatewayClass, app team owns Gateway + HTTPRoutes.
+apiVersion: gateway.k8s.aws/v1
+kind: LoadBalancerConfiguration
+metadata:
+  name: internet-facing
+  namespace: shop
+spec:
+  scheme: internet-facing
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: shop-gw
+  namespace: shop
+spec:
+  gatewayClassName: aws-alb
+  infrastructure:
+    parametersRef:
+      group: gateway.k8s.aws
+      kind: LoadBalancerConfiguration
+      name: internet-facing
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: shop
+  namespace: shop
+spec:
+  parentRefs:
+    - name: shop-gw
+  rules:
+    - matches:
+        - path: { type: PathPrefix, value: /api }
+      backendRefs:
+        - { name: shop-api, port: 8080 }
+    - backendRefs:
+        - { name: shop-web, port: 80 }
+---
+# IP targets + health check for the api backend
+apiVersion: gateway.k8s.aws/v1
+kind: TargetGroupConfiguration
+metadata:
+  name: shop-api
+  namespace: shop
+spec:
+  targetReference:
+    name: shop-api
+  defaultConfiguration:
+    targetType: ip
+    healthCheckConfig:
+      healthCheckPath: /healthz

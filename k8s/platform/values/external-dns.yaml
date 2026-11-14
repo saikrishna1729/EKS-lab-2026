@@ -1,0 +1,11 @@
+provider:
+  name: aws
+serviceAccount:
+  create: true
+  name: external-dns
+sources: [ingress, service]
+# sync = also DELETE records when the Ingress goes away (needed for clean daily teardown)
+policy: sync
+registry: txt
+interval: 1m
+# domainFilters and txtOwnerId are injected per cluster

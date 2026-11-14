@@ -1,0 +1,9 @@
+# Single-binary Tempo: fine for a lab. Production = tempo-distributed + S3 backend.
+tempo:
+  retention: 24h
+  reportingEnabled: false
+  metricsGenerator:
+    enabled: true   # span metrics + service graph -> Prometheus remote-write
+    remoteWriteUrl: http://kps-prometheus.monitoring:9090/api/v1/write
+persistence:
+  enabled: false

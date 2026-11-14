@@ -1,0 +1,23 @@
+# L200 with a domain: HTTPS on shop.${DOMAIN}. The ALB controller finds the ACM wildcard
+# certificate (created by Terraform) from the host name; ExternalDNS creates the DNS record.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../l200
+patches:
+  - target:
+      kind: Ingress
+      name: shop
+    patch: |
+      - op: add
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1listen-ports
+        value: '[{"HTTP": 80}, {"HTTPS": 443}]'
+      - op: add
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1ssl-redirect
+        value: "443"
+      - op: add
+        path: /metadata/annotations/external-dns.alpha.kubernetes.io~1hostname
+        value: shop.${DOMAIN}
+      - op: add
+        path: /spec/rules/0/host
+        value: shop.${DOMAIN}

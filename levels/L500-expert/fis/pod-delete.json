@@ -1,0 +1,26 @@
+{
+  "description": "Delete 50% of shop-api pods (EKS pod action)",
+  "roleArn": "arn:aws:iam::ACCOUNT_ID:role/eks-lab-fis",
+  "stopConditions": [{ "source": "none" }],
+  "targets": {
+    "shopApi": {
+      "resourceType": "aws:eks:pod",
+      "parameters": {
+        "clusterIdentifier": "arn:aws:eks:REGION:ACCOUNT_ID:cluster/eks-lab",
+        "namespace": "shop",
+        "selectorType": "labelSelector",
+        "selectorValue": "app.kubernetes.io/name=shop-api",
+        "targetContainerName": "api"
+      },
+      "selectionMode": "PERCENT(50)"
+    }
+  },
+  "actions": {
+    "deletePods": {
+      "actionId": "aws:eks:pod-delete",
+      "parameters": { "kubernetesServiceAccount": "fis-experiment" },
+      "targets": { "Pods": "shopApi" }
+    }
+  },
+  "tags": { "Project": "eks-lab" }
+}

@@ -1,0 +1,34 @@
+# FIS EKS pod actions run as this ServiceAccount. Map the eks-lab-fis role to user "fis-experiment"
+# with an access entry:
+#   aws eks create-access-entry --cluster-name eks-lab --principal-arn arn:aws:iam::<acct>:role/eks-lab-fis --username fis-experiment
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: fis-experiment, namespace: shop }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: fis-experiment, namespace: shop }
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, create, patch, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, list, get, delete, deletecollection]
+  - apiGroups: [""]
+    resources: [pods/ephemeralcontainers]
+    verbs: [update]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: fis-experiment, namespace: shop }
+subjects:
+  - { kind: ServiceAccount, name: fis-experiment, namespace: shop }
+  - { kind: User, name: fis-experiment, apiGroup: rbac.authorization.k8s.io }
+roleRef: { kind: Role, name: fis-experiment, apiGroup: rbac.authorization.k8s.io }

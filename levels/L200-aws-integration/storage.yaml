@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: storage-lab
+---
+# EBS (RWO): one volume per replica, each pinned to its pod's AZ
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ebs-writer
+  namespace: storage-lab
+spec:
+  serviceName: ebs-writer
+  replicas: 2
+  selector:
+    matchLabels: { app: ebs-writer }
+  template:
+    metadata:
+      labels: { app: ebs-writer }
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels: { app: ebs-writer }
+      containers:
+        - name: app
+          image: public.ecr.aws/docker/library/busybox:1.37
+          command: ["sh", "-c", "while true; do date >> /data/log; sleep 10; done"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 32Mi }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: gp3
+        resources:
+          requests: { storage: 2Gi }
+---
+# EFS (RWX): many pods on different nodes/AZs share one volume
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared
+  namespace: storage-lab
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: efs
+  resources:
+    requests: { storage: 5Gi }   # ignored by EFS (elastic), but required by the API
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: efs-readers
+  namespace: storage-lab
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: efs-readers }
+  template:
+    metadata:
+      labels: { app: efs-readers }
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+        - name: app
+          image: public.ecr.aws/docker/library/busybox:1.37
+          command: ["sh", "-c", "echo $(hostname) >> /shared/members; while true; do sort -u /shared/members | tr '\\n' ' '; echo; sleep 15; done"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 32Mi }
+          volumeMounts:
+            - { name: shared, mountPath: /shared }
+      volumes:
+        - name: shared
+          persistentVolumeClaim:
+            claimName: shared

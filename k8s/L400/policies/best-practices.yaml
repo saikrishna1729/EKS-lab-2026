@@ -1,0 +1,124 @@
+# Kyverno policies. Enforce in "shop" (and any namespace labelled policy.eks-lab/enforce=true),
+# Audit everywhere else — the normal way to roll policy out without breaking platform add-ons.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow :latest
+    policies.kyverno.io/description: Mutable tags make rollbacks and audits impossible. Pin a tag or digest.
+spec:
+  validationFailureAction: Audit
+  validationFailureActionOverrides:
+    - action: Enforce
+      namespaceSelector:
+        matchExpressions:
+          - { key: kubernetes.io/metadata.name, operator: In, values: [shop] }
+  background: true
+  rules:
+    - name: require-pinned-tag
+      match:
+        any:
+          - resources: { kinds: [Pod] }
+      validate:
+        message: "Images must use a pinned tag (not :latest or untagged)."
+        pattern:
+          spec:
+            containers:
+              - image: "*:* & !*:latest"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-requests-limits
+spec:
+  validationFailureAction: Audit
+  validationFailureActionOverrides:
+    - action: Enforce
+      namespaceSelector:
+        matchExpressions:
+          - { key: kubernetes.io/metadata.name, operator: In, values: [shop] }
+  background: true
+  rules:
+    - name: cpu-memory-requests-and-memory-limit
+      match:
+        any:
+          - resources: { kinds: [Pod] }
+      validate:
+        message: "Every container needs cpu+memory requests and a memory limit."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests: { cpu: "?*", memory: "?*" }
+                  limits: { memory: "?*" }
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-image-registries
+spec:
+  validationFailureAction: Audit
+  validationFailureActionOverrides:
+    - action: Enforce
+      namespaceSelector:
+        matchExpressions:
+          - { key: kubernetes.io/metadata.name, operator: In, values: [shop] }
+  background: true
+  rules:
+    - name: only-private-ecr
+      match:
+        any:
+          - resources: { kinds: [Pod] }
+      validate:
+        message: "Images in shop must come from this account's ECR."
+        pattern:
+          spec:
+            containers:
+              - image: "*.dkr.ecr.*.amazonaws.com/*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privileged-and-hostpath
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: no-privileged
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchExpressions:
+                  - { key: kubernetes.io/metadata.name, operator: NotIn, values: [kube-system, monitoring, kyverno, velero, istio-system] }
+      validate:
+        message: "Privileged containers are not allowed."
+        pattern:
+          spec:
+            =(initContainers):
+              - =(securityContext):
+                  =(privileged): "false"
+            containers:
+              - =(securityContext):
+                  =(privileged): "false"
+---
+# Mutation example: add a default "team" label so cost reports (OpenCost, L500) can group by it
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-team-label
+spec:
+  rules:
+    - name: default-team
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [shop]
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              +(team): shop

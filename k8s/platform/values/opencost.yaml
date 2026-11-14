@@ -1,0 +1,9 @@
+opencost:
+  prometheus:
+    internal:
+      enabled: true
+      serviceName: kps-prometheus
+      namespaceName: monitoring
+      port: 9090
+  ui:
+    enabled: true

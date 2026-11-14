@@ -1,0 +1,25 @@
+# CIS Kubernetes benchmark (EKS profile) on one node:
+#   kubectl apply -f k8s/tools/kube-bench.yaml && kubectl logs -f job/kube-bench
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kube-bench
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      hostPID: true
+      restartPolicy: Never
+      containers:
+        - name: kube-bench
+          image: docker.io/aquasec/kube-bench:latest   # tool image; excluded from the shop policies
+          command: ["kube-bench", "run", "--benchmark", "eks-1.5.0", "--targets", "node,policies,managedservices"]
+          volumeMounts:
+            - { name: var-lib-kubelet, mountPath: /var/lib/kubelet, readOnly: true }
+            - { name: etc-systemd, mountPath: /etc/systemd, readOnly: true }
+            - { name: etc-kubernetes, mountPath: /etc/kubernetes, readOnly: true }
+      volumes:
+        - { name: var-lib-kubelet, hostPath: { path: /var/lib/kubelet } }
+        - { name: etc-systemd, hostPath: { path: /etc/systemd } }
+        - { name: etc-kubernetes, hostPath: { path: /etc/kubernetes } }

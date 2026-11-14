@@ -1,0 +1,35 @@
+{
+  "description": "Simulate losing one AZ: stop its nodes and blackhole its subnets for 10 minutes",
+  "roleArn": "arn:aws:iam::ACCOUNT_ID:role/eks-lab-fis",
+  "stopConditions": [{ "source": "none" }],
+  "targets": {
+    "azNodes": {
+      "resourceType": "aws:ec2:instance",
+      "resourceTags": { "Project": "eks-lab" },
+      "filters": [
+        { "path": "Placement.AvailabilityZone", "values": ["REGIONa"] },
+        { "path": "State.Name", "values": ["running"] }
+      ],
+      "selectionMode": "ALL"
+    },
+    "azSubnets": {
+      "resourceType": "aws:ec2:subnet",
+      "resourceTags": { "Project": "eks-lab" },
+      "filters": [{ "path": "AvailabilityZone", "values": ["REGIONa"] }],
+      "selectionMode": "ALL"
+    }
+  },
+  "actions": {
+    "blackhole": {
+      "actionId": "aws:network:disrupt-connectivity",
+      "parameters": { "duration": "PT10M", "scope": "all" },
+      "targets": { "Subnets": "azSubnets" }
+    },
+    "stopNodes": {
+      "actionId": "aws:ec2:stop-instances",
+      "parameters": { "startInstancesAfterDuration": "PT10M" },
+      "targets": { "Instances": "azNodes" }
+    }
+  },
+  "tags": { "Project": "eks-lab" }
+}

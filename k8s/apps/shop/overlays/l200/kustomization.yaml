@@ -1,0 +1,29 @@
+# L200: ALB Ingress (AWS Load Balancer Controller, IP targets), Pod Identity for S3/SQS,
+# and HTTPS on shop.${DOMAIN} when a domain is configured (cert auto-discovered from ACM).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+components:
+  - ../../components/alb-ingress
+images:
+  - name: shop-api
+    newName: ${ECR_REGISTRY}/eks-lab/shop-api
+    newTag: ${IMAGE_TAG}
+  - name: shop-web
+    newName: ${ECR_REGISTRY}/eks-lab/shop-web
+    newTag: ${IMAGE_TAG}
+  - name: shop-worker
+    newName: ${ECR_REGISTRY}/eks-lab/shop-worker
+    newTag: ${IMAGE_TAG}
+patches:
+  - target:
+      kind: ConfigMap
+      name: shop-config
+    patch: |
+      - op: add
+        path: /data/S3_BUCKET
+        value: ${DEMO_BUCKET}
+      - op: add
+        path: /data/QUEUE_URL
+        value: ${ORDERS_QUEUE_URL}

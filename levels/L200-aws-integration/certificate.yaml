@@ -1,0 +1,14 @@
+# cert-manager + Let's Encrypt (staging) via Route 53 DNS-01. Replace DOMAIN.
+# cert-manager's Pod Identity role may only change records in your lab hosted zone.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: shop-internal
+  namespace: shop
+spec:
+  secretName: shop-internal-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-staging
+  dnsNames:
+    - internal.DOMAIN

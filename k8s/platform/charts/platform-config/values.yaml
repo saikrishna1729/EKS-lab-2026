@@ -1,0 +1,25 @@
+# Injected per cluster (scripts/addons.sh or the Argo CD cluster-secret annotations)
+clusterName: eks-lab
+region: ap-southeast-1
+
+storage:
+  enabled: true
+  efsId: ""            # set => an "efs" RWX StorageClass is created
+
+gatewayClasses:
+  enabled: true
+
+karpenter:
+  enabled: false
+  # Production: pin an AMI version (al2023@v2026xxxx) and roll it deliberately.
+  amiAlias: al2023@latest
+  cpuLimit: 32
+
+externalSecrets:
+  enabled: false
+
+certManager:
+  enabled: false
+  email: ""
+  domain: ""
+  hostedZoneId: ""

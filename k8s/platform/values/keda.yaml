@@ -1,0 +1,6 @@
+serviceAccount:
+  operator:
+    name: keda-operator   # matches the Pod Identity association
+resources:
+  operator:
+    requests: { cpu: 50m, memory: 128Mi }

@@ -1,0 +1,33 @@
+# 1) Strict mTLS for everything in shop
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata: { name: default, namespace: shop }
+spec:
+  mtls: { mode: STRICT }
+---
+# 2) Identity-based authorization (SPIFFE identity = ServiceAccount, not labels or IPs):
+#    only shop-web may call shop-api, and only GET/POST
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata: { name: api-only-from-web, namespace: shop }
+spec:
+  targetRefs:
+    - { kind: Service, group: "", name: shop-api }
+  action: ALLOW
+  rules:
+    - from:
+        - source: { principals: ["cluster.local/ns/shop/sa/shop-web"] }
+      to:
+        - operation: { methods: ["GET", "POST"] }
+---
+# 3) L7 needs a waypoint proxy for the namespace
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: waypoint
+  namespace: shop
+  labels: { istio.io/waypoint-for: service }
+spec:
+  gatewayClassName: istio-waypoint
+  listeners:
+    - { name: mesh, port: 15008, protocol: HBONE }

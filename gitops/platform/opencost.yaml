@@ -1,0 +1,42 @@
+# Installs opencost 2.5.34 on every cluster whose Argo CD cluster secret has enable_opencost=true.
+# Per-cluster values come from the secret's annotations (written by scripts/addons.sh from Terraform).
+# Ordering between add-ons is handled by retries (e.g. Karpenter CRs wait for the Karpenter CRDs).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: opencost
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_opencost: "true"
+  template:
+    metadata:
+      name: 'opencost-{{ .name }}'
+    spec:
+      project: default
+      sources:
+        - repoURL: https://opencost.github.io/opencost-helm-chart
+          chart: opencost
+          targetRevision: 2.5.34
+          helm:
+            releaseName: opencost
+            valueFiles:
+              - $values/k8s/platform/values/opencost.yaml
+        - repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+          targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+          ref: values
+      destination:
+        server: '{{ .server }}'
+        namespace: opencost
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

@@ -1,0 +1,51 @@
+# Installs velero 12.2.5 on every cluster whose Argo CD cluster secret has enable_velero=true.
+# Per-cluster values come from the secret's annotations (written by scripts/addons.sh from Terraform).
+# Ordering between add-ons is handled by retries (e.g. Karpenter CRs wait for the Karpenter CRDs).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: velero
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_velero: "true"
+  template:
+    metadata:
+      name: 'velero-{{ .name }}'
+    spec:
+      project: default
+      sources:
+        - repoURL: https://vmware-tanzu.github.io/helm-charts
+          chart: velero
+          targetRevision: 12.2.5
+          helm:
+            releaseName: velero
+            valueFiles:
+              - $values/k8s/platform/values/velero.yaml
+            valuesObject:
+              configuration:
+                backupStorageLocation:
+                  - name: default
+                    provider: aws
+                    bucket: '{{ index .metadata.annotations "velero_bucket" }}'
+                    prefix: '{{ index .metadata.annotations "cluster_name" }}'
+                    config:
+                      region: '{{ index .metadata.annotations "aws_region" }}'
+        - repoURL: '{{ index .metadata.annotations "gitops_repo" }}'
+          targetRevision: '{{ index .metadata.annotations "gitops_revision" }}'
+          ref: values
+      destination:
+        server: '{{ .server }}'
+        namespace: velero
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 20
+          backoff: { duration: 15s, factor: 2, maxDuration: 3m }

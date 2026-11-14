@@ -1,0 +1,7 @@
+# Recommend-only: read VPA recommendations to right-size requests; don't auto-evict pods.
+recommender:
+  enabled: true
+updater:
+  enabled: false
+admissionController:
+  enabled: false

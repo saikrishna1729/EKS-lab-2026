@@ -1,0 +1,11 @@
+# Rendered by scripts/gitops-init.sh from Terraform outputs (names are deterministic,
+# so this survives daily teardown/rebuild). Commit the rendered file.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shop-config
+  namespace: shop
+data:
+  S3_BUCKET: DEMO_BUCKET
+  QUEUE_URL: ORDERS_QUEUE_URL
+  APP_VERSION: v1
