@@ -30,17 +30,34 @@ host a Route 53 zone: +$0.50/month).
 4. Confirm the **budget subscription email** AWS sends you.
 5. Add an `eks-lab` profile to `~/.aws/config`. Pick the option that matches how you sign in.
 
-   **A. IAM Identity Center (SSO)** — recommended. Your SSO admin profile is the *source*;
-   `eks-lab` assumes `eks-lab-admin` from it, so every lab action shows up in CloudTrail as
-   `assumed-role/eks-lab-admin/eks-lab`.
+   **A. IAM Identity Center (SSO)** — recommended. In Identity Center, create a permission set
+   **`EKSLabOperator`** with *only* this inline policy (no managed policies), and assign it to
+   yourself in the lab account:
+   ```json
+   { "Version": "2012-10-17", "Statement": [{ "Effect": "Allow",
+     "Action": ["sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"],
+     "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/eks-lab-admin" }] }
+   ```
+   Keep `trusted_sso_permission_sets = ["EKSLabOperator"]` in [terraform.tfvars](terraform.tfvars).
+   The operator session can do nothing except become `eks-lab-admin`, and no other identity
+   (not even your AdministratorAccess session) can assume the role. Every lab action shows up
+   in CloudTrail as `assumed-role/eks-lab-admin/eks-lab`.
    ```ini
+   [profile eks-lab-operator]
+   sso_session    = <your-sso-session>
+   sso_account_id = <ACCOUNT_ID>
+   sso_role_name  = EKSLabOperator
+   region         = ap-southeast-1
+
    [profile eks-lab]
    role_arn          = arn:aws:iam::<ACCOUNT_ID>:role/eks-lab-admin
-   source_profile    = <your-sso-admin-profile>     # e.g. a profile with sso_session + sso_role_name
+   source_profile    = eks-lab-operator
    role_session_name = eks-lab
    region            = ap-southeast-1
    ```
-   Sign in each day with `aws sso login --profile <your-sso-admin-profile>`.
+   Sign in each day with `aws sso login --profile eks-lab-operator`.
+   > Create and assign the permission set *before* applying the trust change, so you're never
+   > locked out. Your AdministratorAccess profile (`BOOTSTRAP_PROFILE`) can always fix the trust policy.
    > - The trust policy allows only sessions of the permission sets in `trusted_sso_permission_sets`
    >   (matched on `aws:PrincipalArn`). SSO sessions don't carry `aws:MultiFactorAuthPresent`;
    >   Identity Center enforced MFA when you signed in.

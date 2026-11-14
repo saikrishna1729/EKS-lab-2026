@@ -35,11 +35,18 @@ Back to [[00 EKS Lab Home]]
   make bootstrap
   ```
 - [ ] Confirm the AWS Budgets subscription email
-- [ ] Add the `eks-lab` profile to `~/.aws/config` (template in `bootstrap/README.md`)
-- [ ] Test it
+- [x] Create the `EKSLabOperator` permission set in Identity Center (inline policy: only `sts:AssumeRole` on `eks-lab-admin`) and assign it in the lab account
+- [x] Add the `eks-lab-operator` and `eks-lab` profiles to `~/.aws/config` (templates in `bootstrap/README.md`)
+- [x] Test it
   ```bash
-  AWS_PROFILE=eks-lab aws sts get-caller-identity
+  aws sso login --profile eks-lab-operator
+  AWS_PROFILE=eks-lab aws sts get-caller-identity   # -> assumed-role/eks-lab-admin/eks-lab
   ```
+
+> [!note] Identity chain
+> `eks-lab-operator` (SSO, can only assume the role) → **`eks-lab-admin`** (Terraform + cluster-admin).
+> Always run `make up` as `eks-lab`, so the role is the cluster creator and keeps cluster-admin.
+> `EKSLab-Admin` (AdministratorAccess) is break-glass only: it runs `make bootstrap` and can fix the trust policy.
 - [ ] *(if DOMAIN)* Delegate NS records to the name servers printed by
   ```bash
   terraform -chdir=bootstrap output route53_name_servers
