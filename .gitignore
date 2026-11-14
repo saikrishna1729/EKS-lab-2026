@@ -23,3 +23,7 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+
+# Obsidian vault config (open the repo root as the vault)
+.obsidian/
+.trash/

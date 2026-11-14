@@ -30,6 +30,7 @@ k8s/                  Plain manifests + Helm values, grouped by level
 gitops/               Argo CD app-of-apps (from L300)
 scripts/              addons.sh, predestroy.sh, nuke-check.sh, helpers
 levels/LXXX-*/        Lab guide, tfvars and verify.sh for each level
+notebook/             Obsidian lab notebook: checklists, session logs, troubleshooting, cost log
 ```
 
 **Design rule used throughout:** Terraform owns *AWS* resources (VPC, EKS, IAM, SQS, AMP…).
