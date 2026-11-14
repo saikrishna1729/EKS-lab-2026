@@ -31,24 +31,24 @@ flowchart TB
 ```
 
 ## Session 1 — eksctl (≈ 60 min)
-- [ ] Create the throwaway cluster
+- [x] Create the throwaway cluster
   ```bash
   eksctl create cluster -f levels/L100-foundations/eksctl-cluster.yaml
   ```
 - [ ] Look at the two CloudFormation stacks eksctl created
-- [ ] Explore the empty cluster
+- [x] Explore the empty cluster
   ```bash
   kubectl get nodes -o wide
   kubectl get pods -A
   kubectl get ds -n kube-system
   ```
-- [ ] Check who I am to Kubernetes
+- [x] Check who I am to Kubernetes
   ```bash
   kubectl auth whoami
   aws eks list-access-entries --cluster-name eks-lab-first
   ```
 - [ ] *(optional)* Try an Auto Mode cluster and note 3 things I no longer control
-- [ ] Delete the cluster
+- [x] Delete the cluster
   ```bash
   eksctl delete cluster -f levels/L100-foundations/eksctl-cluster.yaml --disable-nodegroup-eviction
   ```
@@ -94,12 +94,12 @@ flowchart TB
 - [ ] Web shows an API error (no endpoints)
 
 ## Finish
-- [ ] Run the checks
+- [x] Run the checks
   ```bash
   make verify LEVEL=100
   ```
   Result: `__/__`
-- [ ] Tear down and check for leftovers
+- [x] Tear down and check for leftovers
   ```bash
   make down
   make nuke-check

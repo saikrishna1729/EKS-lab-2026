@@ -10,13 +10,13 @@ Back to [[00 EKS Lab Home]]
 > [!tip] Copy this checklist into the session log at the bottom of the level note you're working on.
 
 ## Start (≈ 15–20 min)
-- [ ] Sign in (operator SSO) and start with fresh credentials
+- [x] Sign in (operator SSO) and start with fresh credentials
   ```bash
   aws sso login --profile eks-lab-operator
   export AWS_PROFILE=eks-lab
   aws sts get-caller-identity
   ```
-- [ ] Check there are no leftovers from last time
+- [x] Check there are no leftovers from last time
   ```bash
   make nuke-check
   ```

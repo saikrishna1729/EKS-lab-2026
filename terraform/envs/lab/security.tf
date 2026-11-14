@@ -37,7 +37,7 @@ locals {
   access_entries = { for k, v in {
     # dev: edit rights only inside the "shop" namespace (EKS-managed access policy)
     dev = {
-      principal_arn = aws_iam_role.dev[0].arn
+      principal_arn = try(aws_iam_role.dev[0].arn, null)
       policy_associations = {
         edit = {
           policy_arn   = "arn:${local.partition}:eks::aws:cluster-access-policy/AmazonEKSEditPolicy"
@@ -48,7 +48,7 @@ locals {
     # viewer: no access policy — mapped to a Kubernetes group bound by our own RBAC
     # (k8s/L400/rbac/viewer.yaml) to show the "bring your own RBAC" pattern.
     viewer = {
-      principal_arn     = aws_iam_role.viewer[0].arn
+      principal_arn     = try(aws_iam_role.viewer[0].arn, null)
       kubernetes_groups = ["lab-viewers"]
     }
   } : k => v if var.enable_rbac_personas }

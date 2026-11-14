@@ -49,7 +49,7 @@ locals {
     aws-ebs-csi-driver = {
       most_recent = true
       pod_identity_association = [{
-        role_arn        = module.ebs_csi_pod_identity[0].iam_role_arn
+        role_arn        = try(module.ebs_csi_pod_identity[0].iam_role_arn, null)
         service_account = "ebs-csi-controller-sa"
       }]
     }
@@ -62,7 +62,7 @@ locals {
     aws-efs-csi-driver = {
       most_recent = true
       pod_identity_association = [{
-        role_arn        = module.efs_csi_pod_identity[0].iam_role_arn
+        role_arn        = try(module.efs_csi_pod_identity[0].iam_role_arn, null)
         service_account = "efs-csi-controller-sa"
       }]
     }
@@ -78,7 +78,7 @@ locals {
     amazon-cloudwatch-observability = {
       most_recent = true
       pod_identity_association = [{
-        role_arn        = module.cloudwatch_pod_identity[0].iam_role_arn
+        role_arn        = try(module.cloudwatch_pod_identity[0].iam_role_arn, null)
         service_account = "cloudwatch-agent"
       }]
     }
