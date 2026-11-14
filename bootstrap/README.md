@@ -19,17 +19,39 @@ host a Route 53 zone: +$0.50/month).
 
 1. Use an **admin** identity for this step only (an admin IAM user or an IAM Identity
    Center admin session). A narrowly-scoped user that can't call EKS/IAM APIs will fail here.
+   Set `BOOTSTRAP_PROFILE` in `lab.env` to that profile (empty = your default credentials).
 2. Fill `lab.env` (at least `AWS_REGION`, `ALERT_EMAIL`; `DOMAIN` and `GITHUB_REPO` are optional).
+   If you sign in with Identity Center, keep `trusted_sso_permission_sets` in
+   [terraform.tfvars](terraform.tfvars) set to your admin permission set name.
 3. From the repo root:
    ```bash
    make bootstrap
    ```
 4. Confirm the **budget subscription email** AWS sends you.
-5. Add a profile that assumes the lab role to `~/.aws/config`:
+5. Add an `eks-lab` profile to `~/.aws/config`. Pick the option that matches how you sign in.
+
+   **A. IAM Identity Center (SSO)** — recommended. Your SSO admin profile is the *source*;
+   `eks-lab` assumes `eks-lab-admin` from it, so every lab action shows up in CloudTrail as
+   `assumed-role/eks-lab-admin/eks-lab`.
+   ```ini
+   [profile eks-lab]
+   role_arn          = arn:aws:iam::<ACCOUNT_ID>:role/eks-lab-admin
+   source_profile    = <your-sso-admin-profile>     # e.g. a profile with sso_session + sso_role_name
+   role_session_name = eks-lab
+   region            = ap-southeast-1
+   ```
+   Sign in each day with `aws sso login --profile <your-sso-admin-profile>`.
+   > - The trust policy allows only sessions of the permission sets in `trusted_sso_permission_sets`
+   >   (matched on `aws:PrincipalArn`). SSO sessions don't carry `aws:MultiFactorAuthPresent`;
+   >   Identity Center enforced MFA when you signed in.
+   > - Role chaining caps each session at **1 hour**, so leave out `duration_seconds`. The CLI and
+   >   Terraform refresh it automatically while your SSO sign-in is still valid.
+
+   **B. IAM user with access keys + an MFA device** — assume the lab role:
    ```ini
    [profile eks-lab]
    role_arn       = arn:aws:iam::<ACCOUNT_ID>:role/eks-lab-admin
-   source_profile = default          # the profile holding your admin/user credentials
+   source_profile = default          # the profile holding your IAM user keys
    mfa_serial     = arn:aws:iam::<ACCOUNT_ID>:mfa/<your-mfa-device>
    region         = ap-southeast-1
    duration_seconds = 43200

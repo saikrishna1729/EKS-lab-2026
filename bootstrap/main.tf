@@ -127,12 +127,25 @@ data "aws_iam_policy_document" "lab_admin_trust" {
       type        = "AWS"
       identifiers = ["arn:${data.aws_partition.current.partition}:iam::${local.account_id}:root"]
     }
+    # IAM-user path: require an MFA'd session.
     dynamic "condition" {
-      for_each = var.require_mfa ? [1] : []
+      for_each = var.require_mfa && length(var.trusted_sso_permission_sets) == 0 ? [1] : []
       content {
         test     = "Bool"
         variable = "aws:MultiFactorAuthPresent"
         values   = ["true"]
+      }
+    }
+    # Identity Center path: only sessions of the named permission sets may assume the role.
+    # (SSO sessions don't carry aws:MultiFactorAuthPresent; Identity Center enforced MFA at sign-in.)
+    dynamic "condition" {
+      for_each = length(var.trusted_sso_permission_sets) > 0 ? [1] : []
+      content {
+        test     = "ArnLike"
+        variable = "aws:PrincipalArn"
+        values = [for ps in var.trusted_sso_permission_sets :
+          # path is .../sso.amazonaws.com/ for us-east-1 Identity Center, .../sso.amazonaws.com/<region>/ elsewhere
+        "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:role/aws-reserved/sso.amazonaws.com/*AWSReservedSSO_${ps}_*"]
       }
     }
   }

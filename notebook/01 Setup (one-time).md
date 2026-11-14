@@ -19,11 +19,11 @@ Back to [[00 EKS Lab Home]]
   ```
 
 ## 2. Config
-- [ ] Create `lab.env`
+- [x] Create `lab.env`
   ```bash
   cp lab.env.example lab.env
   ```
-- [ ] Set `AWS_REGION`, `ALERT_EMAIL`, and `GITHUB_REPO=saikrishna1729/EKS-lab-2026`
+- [x] Set `AWS_REGION`, `ALERT_EMAIL`, and `GITHUB_REPO=saikrishna1729/EKS-lab-2026`
 - [ ] *(optional)* Set `DOMAIN`, a domain or subdomain you control, for the HTTPS/DNS labs
 
 ## 3. Bootstrap (admin identity, once)

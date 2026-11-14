@@ -17,6 +17,8 @@ export
 LEVEL ?= $(shell cat .lab/current-level 2>/dev/null || echo 100)
 LEVEL_DIR := $(firstword $(wildcard levels/L$(LEVEL)-*))
 TFVARS := $(abspath $(LEVEL_DIR)/lab.tfvars)
+# Bootstrap runs as an admin identity: BOOTSTRAP_PROFILE (lab.env) or your default credentials
+BOOTSTRAP_ENV := $(if $(BOOTSTRAP_PROFILE),env AWS_PROFILE=$(BOOTSTRAP_PROFILE),env -u AWS_PROFILE)
 LAB_TF := terraform -chdir=terraform/envs/lab
 DR_TF := terraform -chdir=terraform/envs/dr
 
@@ -44,12 +46,12 @@ tflint: ## Optional: install tflint from its GitHub release into ~/.local/bin
 	  rm -rf $$TMP && $$HOME/.local/bin/tflint --version && echo "Make sure ~/.local/bin is on your PATH"
 
 bootstrap: ## One-time: state bucket, budget, ECR, IAM role (run as an admin identity)
-	env -u AWS_PROFILE terraform -chdir=bootstrap init
-	env -u AWS_PROFILE terraform -chdir=bootstrap apply \
+	$(BOOTSTRAP_ENV) terraform -chdir=bootstrap init
+	$(BOOTSTRAP_ENV) terraform -chdir=bootstrap apply \
 	  -var region=$(AWS_REGION) -var alert_email=$(ALERT_EMAIL) \
 	  -var domain=$(DOMAIN) -var github_repo=$(GITHUB_REPO)
 	mkdir -p .lab
-	env -u AWS_PROFILE terraform -chdir=bootstrap output -raw backend_hcl > .lab/backend.hcl
+	$(BOOTSTRAP_ENV) terraform -chdir=bootstrap output -raw backend_hcl > .lab/backend.hcl
 	@echo "Bootstrap done. Now configure the eks-lab profile — see bootstrap/README.md"
 
 images: ## Build & push the sample app images (multi-arch) to ECR

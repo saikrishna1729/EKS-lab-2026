@@ -25,6 +25,12 @@ variable "require_mfa" {
   description = "Require MFA to assume eks-lab-admin. Strongly recommended."
 }
 
+variable "trusted_sso_permission_sets" {
+  type        = list(string)
+  default     = []
+  description = "IAM Identity Center permission set names allowed to assume eks-lab-admin (e.g. [\"AdministratorAccess\"]). When set, replaces the MFA condition."
+}
+
 variable "domain" {
   type        = string
   default     = ""
