@@ -30,7 +30,18 @@ help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 tools: ## Install extra CLI tools with Homebrew
-	brew install k9s stern argocd tflint kubeconform infracost cosign hey kubent velero eks-node-viewer argoproj/tap/kubectl-argo-rollouts
+	brew install k9s stern argocd kubeconform infracost cosign hey kubent velero eks-node-viewer argoproj/tap/kubectl-argo-rollouts
+	@echo "Optional: 'make tflint' (tflint is no longer in Homebrew; installed from its GitHub release)"
+
+tflint: ## Optional: install tflint from its GitHub release into ~/.local/bin
+	@V=$$(curl -sL https://api.github.com/repos/terraform-linters/tflint/releases/latest | jq -r .tag_name); \
+	  ARCH=$$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/'); OS=$$(uname -s | tr A-Z a-z); \
+	  TMP=$$(mktemp -d); echo "Downloading tflint $$V ($$OS/$$ARCH)"; \
+	  curl -sLo $$TMP/t.zip https://github.com/terraform-linters/tflint/releases/download/$$V/tflint_$${OS}_$${ARCH}.zip && \
+	  curl -sLo $$TMP/sums https://github.com/terraform-linters/tflint/releases/download/$$V/checksums.txt && \
+	  (cd $$TMP && grep " tflint_$${OS}_$${ARCH}.zip$$" sums | sed "s/tflint_$${OS}_$${ARCH}.zip/t.zip/" | shasum -a 256 -c -) && \
+	  unzip -oq $$TMP/t.zip -d $$TMP && mkdir -p $$HOME/.local/bin && install -m 755 $$TMP/tflint $$HOME/.local/bin/tflint && \
+	  rm -rf $$TMP && $$HOME/.local/bin/tflint --version && echo "Make sure ~/.local/bin is on your PATH"
 
 bootstrap: ## One-time: state bucket, budget, ECR, IAM role (run as an admin identity)
 	env -u AWS_PROFILE terraform -chdir=bootstrap init

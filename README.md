@@ -47,7 +47,7 @@ by Argo CD (L300+). That's how most platform teams split it, and it avoids the
    ```bash
    make tools
    ```
-   installs `k9s stern argocd tflint kubeconform infracost cosign hey` with Homebrew.
+   installs `k9s stern argocd kubeconform infracost cosign hey kubent velero eks-node-viewer kubectl-argo-rollouts` with Homebrew. `tflint` is optional and no longer in Homebrew: `make tflint` installs it from its GitHub release (checksum-verified).
 3. Copy the config file and edit it:
    ```bash
    cp lab.env.example lab.env

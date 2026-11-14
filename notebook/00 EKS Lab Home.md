@@ -39,15 +39,15 @@ Change ⬜ to ✅ when `make verify LEVEL=xxx` is all green.
 - [[92 Cost Log]]: track what each session cost
 
 ## Repo landmarks
-| Path | What |
-|---|---|
-| `Makefile` | `make up / verify / down / lint / cost` |
-| `lab.env` | your settings (gitignored) |
-| `terraform/envs/lab/` | the cluster stack |
-| `levels/LXXX-*/lab.tfvars` | which features each level turns on |
-| `k8s/apps/shop/` | sample app manifests |
-| `gitops/` | Argo CD ApplicationSets (L300+) |
-| `scripts/versions.env` | pinned chart versions |
+| Path                       | What                                    |
+| -------------------------- | --------------------------------------- |
+| `Makefile`                 | `make up / verify / down / lint / cost` |
+| `lab.env`                  | your settings (gitignored)              |
+| `terraform/envs/lab/`      | the cluster stack                       |
+| `levels/LXXX-*/lab.tfvars` | which features each level turns on      |
+| `k8s/apps/shop/`           | sample app manifests                    |
+| `gitops/`                  | Argo CD ApplicationSets (L300+)         |
+| `scripts/versions.env`     | pinned chart versions                   |
 
 > [!warning] Golden rule
 > **Never end a session without `make down`.** A forgotten cluster costs about $5/day, and orphaned load balancers or NAT gateways keep billing even after the cluster is gone.
